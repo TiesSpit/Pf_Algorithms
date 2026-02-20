@@ -170,8 +170,12 @@ MonoBehaviour:
     height: 100
   toDo: []
   generatedRooms: []
+  doors: []
   minRoomSize: 10
-  widthSplit: 0
+  MaxRoomSize: 25
+  roomOverlap: 1
+  doorOffset: 5
+  doorWidth: 3
 --- !u!1 &1075912249
 GameObject:
   m_ObjectHideFlags: 0
