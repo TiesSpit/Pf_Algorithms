@@ -172,9 +172,9 @@ MonoBehaviour:
   generatedRooms: []
   doors: []
   minRoomSize: 10
-  MaxRoomSize: 25
+  MaxRoomSize: 30
   roomOverlap: 1
-  doorOffset: 5
+  doorOffset: 2
   doorWidth: 3
 --- !u!1 &1075912249
 GameObject:
@@ -383,8 +383,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1404402879}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.46558046, y: 0.5300218, z: -0.4520812, w: 0.54583365}
-  m_LocalPosition: {x: 25.635628, y: 121.50624, z: 48.523617}
+  m_LocalRotation: {x: 0.6201832, y: -0.0072911168, z: 0.005776853, w: 0.78440183}
+  m_LocalPosition: {x: 44.072594, y: 112.49211, z: 13.297813}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

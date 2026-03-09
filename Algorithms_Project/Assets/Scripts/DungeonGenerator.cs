@@ -11,26 +11,37 @@ public class DungeonGenerator : MonoBehaviour
     [SerializeField] private List<RectInt> toDo = new();
     [SerializeField] private List<RectInt> generatedRooms = new();
     [SerializeField] private List<RectInt> doors = new();
+    [SerializeField] private List<RectInt> roomsToRemove = new();
 
     [Header("Room generation")]
-    [SerializeField] private int minRoomSize = 10;
+    [Range(10,100)]
+    [SerializeField] private int minRoomSize;
+
+    [Range(20, 120)]
     [SerializeField] private int MaxRoomSize;
     [SerializeField] private int roomOverlap;
 
     private bool widthSplit;
 
     [Header("Door generation")]
-    [SerializeField] private int doorOffset;
+    //[SerializeField] private int doorOffset;
     [SerializeField] private int doorWidth;
 
+    [Header("Removing doors")]
+    [SerializeField] private int removeRoomAmount;
 
     private Graph<Vector3> graph;
 
     private void Start()
-    {
+    {                
         graph = new Graph<Vector3>();
         toDo.Add(room);
         StartGenerate();
+    }
+
+    private void OnValidate()
+    {
+        if (minRoomSize > MaxRoomSize - 10) MaxRoomSize = minRoomSize + 10;
     }
 
     private void Update()
@@ -46,11 +57,14 @@ public class DungeonGenerator : MonoBehaviour
     //[ContextMenu("Generate Dungeon")]
     public void StartGenerate()
     {
+        doorWidth = minRoomSize / 3;
+        //doorOffset = minRoomSize / 5;
+
         toDo.Clear();
         generatedRooms.Clear();
         doors.Clear();
 
-        graph.ClearNodes();
+        graph.Clear();
         DebugDrawingBatcher.GetInstance().ClearAllBatchedCalls();
 
         toDo.Add(room);
@@ -101,8 +115,8 @@ public class DungeonGenerator : MonoBehaviour
                 //newOtherRoom.yMin -= 1;
             }          
 
-            generatedRooms.Insert(0, newOtherRoom);
-            generatedRooms.Insert(0, newRoom);
+            generatedRooms.Add(newOtherRoom);
+            generatedRooms.Add(newRoom);
 
             toDo.Remove(toDo[0]);
             foreach (var ro in generatedRooms)
@@ -127,6 +141,8 @@ public class DungeonGenerator : MonoBehaviour
             graph.AddNode(GetRoomCenter(ro));
         }
 
+        Debug.Log("Rooms: " + generatedRooms.Count);
+
         yield return new WaitUntil(SpacePress);
         StartCoroutine(GenerateDoors());
     }
@@ -141,7 +157,8 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     public IEnumerator GenerateDoors()
-    {       
+    {
+        //doorWidth = minRoomSize / 3;
         for (int i = 0; i < generatedRooms.Count; i++)
         {
             Vector3 iRoomCenter = GetRoomCenter(generatedRooms[i]);
@@ -152,14 +169,17 @@ public class DungeonGenerator : MonoBehaviour
 
                 if (AlgorithmsUtils.Intersects(generatedRooms[i], generatedRooms[j]))
                 {
-
                     RectInt door = AlgorithmsUtils.Intersect(generatedRooms[i], generatedRooms[j]);
-                    if (door.width < minRoomSize && door.height < minRoomSize)    continue;     // Checks if the intersect is to small to be a room and there for is a corner
-
+                    if (door.width <= doorWidth + (roomOverlap * 2) && door.height <= doorWidth + (roomOverlap * 2))    continue;     // Checks if the intersect is to small to add a door
+                    
+                    //yield return new WaitUntil(SpacePress);
                     Vector3 doorCenter = new();
                     if (door.width == roomOverlap)
                     {
-                        int randomDoorSpawn = Random.Range(door.yMin + doorOffset, door.yMax - doorOffset);
+                        int min = door.yMin + roomOverlap;
+                        int max = door.yMax - roomOverlap - doorWidth;
+                        int randomDoorSpawn = Random.Range(min, max);     // Gets a valid random spawn not overlapping with any corners
+
                         door.yMin = (randomDoorSpawn);
                         door.height = doorWidth;
 
@@ -171,7 +191,10 @@ public class DungeonGenerator : MonoBehaviour
                     }
                     if (door.height == roomOverlap)
                     {
-                        int randomDoorSpawn = Random.Range(door.xMin + doorOffset, door.xMax - doorOffset);
+                        int min = door.xMin + roomOverlap;
+                        int max = door.xMax - roomOverlap - doorWidth;
+                        int randomDoorSpawn = Random.Range(min, max);     // Gets a valid random spawn not overlapping with any corners
+
                         door.xMin = (randomDoorSpawn);
                         door.width = doorWidth;
 
@@ -192,22 +215,61 @@ public class DungeonGenerator : MonoBehaviour
                 }                
             }
         }
+
+        Debug.Log("Doors: " + doors.Count);
+
         yield return new WaitUntil(SpacePress);
         StartCoroutine(GenerateConections());
     }
 
     public IEnumerator GenerateConections()
     {
-        foreach (var node in graph.GetNodes())
+        int randomStartPoint = Random.Range(0, graph.GetNodes().Count);
+        Vector3 startNode = graph.GetNodes().ToArray()[randomStartPoint];
+        bool connected = graph.BFS(startNode);
+
+        foreach (var node in graph.GetVisited())
         {
-            foreach (var edge in graph.GetNodes(node))
-            {                
+            foreach (var edge in graph.GetNeighbors(node))
+            {
                 DebugDrawingBatcher.GetInstance().BatchCall(
-                    () => Debug.DrawLine(node, edge, color: Color.red)                
-                );                
-                yield return new WaitForSeconds(0.05f);
+                    () => Debug.DrawLine(node, edge, color: Color.red)
+                );
+                yield return new WaitForSeconds(0.01f);
             }
+        }         
+        Debug.Log("Connected: " + connected);
+        //yield return new WaitUntil(SpacePress);
+    }
+
+    public IEnumerator RemoveSmallRooms()
+    {
+        foreach (var room in generatedRooms)
+        {
+            yield return new WaitUntil(SpacePress);
+
+            int roomSize = room.x + room.y;
+            if (roomsToRemove.Count == 0)
+            {
+                roomsToRemove.Add(room);
+                continue;
+            }
+            else
+            {
+                for (int i = 0; i < roomsToRemove.Count; i++) 
+                {
+                    RectInt ro = roomsToRemove[i];
+                    int roRoomSize = ro.x + ro.y;
+                    if (roomSize < roRoomSize) 
+                        roomsToRemove.Insert(i, room);
+                }
+            }            
         }
+
+        for (int i = roomsToRemove.Count; i > removeRoomAmount; i--) 
+            roomsToRemove.RemoveAt(i);
+
+        // Remove the rooms that are left from generated rooms and remove the nodes and edges
     }
 
     private void OnDrawGizmos()
