@@ -1,7 +1,11 @@
-using System.Collections.Generic;
+//using System;
 using System.Collections;
-using UnityEngine;
+using System.Collections.Generic;
+using Unity.AI.Navigation;
 using Unity.VisualScripting;
+using UnityEditor;
+using UnityEditor.Overlays;
+using UnityEngine;
 
 public class DungeonGenerator : MonoBehaviour
 {
@@ -29,6 +33,22 @@ public class DungeonGenerator : MonoBehaviour
 
     [Header("Removing doors")]
     [SerializeField] private int removeRoomAmount;
+
+    [Header("Assets")]
+    [SerializeField] private NavMeshSurface navMeshSurface;
+
+    [SerializeField] private GameObject player;
+
+    [SerializeField] private GameObject wall;
+    [SerializeField] private GameObject floor;
+
+    private HashSet<Vector3> spawnLocations;
+
+    [SerializeField] private Transform wallParent;
+    [SerializeField] private Transform floorParent;
+
+    [SerializeField] float buffer = 0.5f;
+    [SerializeField] float floorHeight = -0.5f;
 
     private Graph<Vector3> graph;
 
@@ -88,7 +108,7 @@ public class DungeonGenerator : MonoBehaviour
             if (widthSplit)
             {
                 int randomRoomSize = Random.Range(minRoomSize, newRoom.width - minRoomSize);
-
+                
                 // New room changes
                 newRoom.width = randomRoomSize;
 
@@ -239,7 +259,8 @@ public class DungeonGenerator : MonoBehaviour
             }
         }         
         Debug.Log("Connected: " + connected);
-        //yield return new WaitUntil(SpacePress);
+        yield return new WaitUntil(SpacePress);
+        SpawnDungeonAssets();
     }
 
     public IEnumerator RemoveSmallRooms()
@@ -270,6 +291,111 @@ public class DungeonGenerator : MonoBehaviour
             roomsToRemove.RemoveAt(i);
 
         // Remove the rooms that are left from generated rooms and remove the nodes and edges
+    }
+
+    public void SpawnDungeonAssets()
+    {
+        spawnLocations = new();
+
+        foreach (var room in generatedRooms)
+        {
+            SpawnWallsForRoom(room);
+        }
+        foreach (var room in generatedRooms)
+        {
+            SpawnFloorsForRoom(room);
+        }
+        BakeNavMesh();
+
+        player.transform.position = new Vector3(5, 2, 5);
+    }
+
+    private void SpawnWallsForRoom(RectInt room)
+    {        
+        foreach (var door in doors)
+        {
+            Vector3 doorPosition = new();
+            for (int i = 0; i < doorWidth; i++)
+            {
+                if (door.width == doorWidth)
+                {
+                    doorPosition = new Vector3(door.position.x + buffer + i, buffer, door.position.y + buffer);
+                }
+                else
+                {
+                    doorPosition = new Vector3(door.position.x + buffer, buffer, door.position.y + buffer + i);
+                }
+                spawnLocations.Add(doorPosition);
+            }
+        }
+
+        for (int i = room.xMin; i < room.xMax; i++)
+        {
+            Vector3 spawnPointTop = new Vector3(i + buffer, buffer, room.yMax - buffer);
+            Vector3 spawnPointBot = new Vector3(i + buffer, buffer, room.yMin + buffer);
+            SpawnWall(spawnPointTop);
+            SpawnWall(spawnPointBot);
+        }
+        for (int i = room.yMin; i < room.yMax; i++)
+        {
+            Vector3 spawnPointRight = new Vector3(room.xMax - buffer, buffer, i + buffer);
+            Vector3 spawnPointLeft = new Vector3(room.xMin + buffer, buffer, i + buffer);
+            SpawnWall(spawnPointRight);
+            SpawnWall(spawnPointLeft);
+        }
+    }
+
+    private void SpawnFloorsForRoom(RectInt room)
+    {
+        for (int i = room.xMin + 1; i < room.xMax - 1; i++)
+        {
+            for (int j = room.yMin + 1; j < room.yMax - 1; j++)
+            {
+                Vector3 spawnPoint = new Vector3(i + buffer, floorHeight, j + buffer);
+                SpawnFloor(spawnPoint);
+            }
+        }
+
+        foreach (var door in doors)
+        {
+            Vector3 doorFloor = new();
+            for (int i = 0; i < doorWidth; i++)
+            {
+                if (door.width == doorWidth)
+                {
+                    doorFloor = new Vector3(door.position.x + buffer + i, floorHeight, door.position.y + buffer);
+                }
+                else
+                {
+                    doorFloor = new Vector3(door.position.x + buffer, floorHeight, door.position.y + buffer + i);
+                }
+                SpawnFloor(doorFloor);
+            }
+
+        }
+
+    }
+
+
+    private void SpawnWall(Vector3 spawnPoint)
+    {
+        if (spawnLocations.Contains(spawnPoint)) return;
+
+        spawnLocations.Add(spawnPoint);
+        var newWall = Instantiate(wall, spawnPoint, Quaternion.identity, wallParent);        
+    }
+
+    private void SpawnFloor(Vector3 spawnPoint)
+    {
+        if (spawnLocations.Contains(spawnPoint)) return;
+
+        spawnLocations.Add(spawnPoint);
+        var newFloor = Instantiate(floor, spawnPoint, Quaternion.identity, floorParent);
+    }
+
+    private void BakeNavMesh()
+    {
+        navMeshSurface.BuildNavMesh();
     }
 
     private void OnDrawGizmos()
